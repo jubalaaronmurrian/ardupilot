@@ -1,8 +1,8 @@
 --[[
  Script to use LED strips as position lights.
- For this script we will use four strips with up to 16 LEDs each.
+ For this script we will use four strips with up to 10 LEDs each.
 --]]
-local num_leds = 16
+local num_leds = 10
 local timer = 0
 
 -- Brightness for green or red light.
