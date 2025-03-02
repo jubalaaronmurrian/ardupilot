@@ -77,7 +77,7 @@ function update_LEDs()
   serialLED:send(chan_right)
   serialLED:send(chan_left_back)
   serialLED:send(chan_right_back)
-  return update_LEDs, 100 -- run at 10Hz
+  return update_LEDs, 1000 -- run at 1Hz or 1000ms
 end
 
-return update_LEDs()
+return update_LEDs(), 1000 -- run at 1HZ or 1000ms
