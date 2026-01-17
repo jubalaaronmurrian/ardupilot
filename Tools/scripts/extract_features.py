@@ -7,15 +7,8 @@ AP_FLAKE8_CLEAN
 """
 import argparse
 import re
-import sys
 import build_options
 from build_script_base import BuildScriptBase
-
-
-if sys.version_info[0] < 3:
-    running_python3 = False
-else:
-    running_python3 = True
 
 
 class ExtractFeatures(BuildScriptBase):
@@ -222,7 +215,7 @@ class ExtractFeatures(BuildScriptBase):
             ('AP_BARO_THST_COMP_ENABLED', r'AP_Baro::thrust_pressure_correction\b',),
             ('AP_TEMPCALIBRATION_ENABLED', r'AP_TempCalibration::apply_calibration',),
 
-            ('HAL_PICCOLO_CAN_ENABLE', r'AP_PiccoloCAN::update',),
+            ('AP_PICCOLOCAN_ENABLED', r'AP_PiccoloCAN::update',),
             ('EK3_FEATURE_EXTERNAL_NAV', r'NavEKF3_core::CorrectExtNavVelForSensorOffset'),
             ('EK3_FEATURE_DRAG_FUSION', r'NavEKF3_core::FuseDragForces'),
             ('EK3_FEATURE_OPTFLOW_FUSION', r'NavEKF3_core::FuseOptFlow'),
@@ -312,6 +305,7 @@ class ExtractFeatures(BuildScriptBase):
             ('AP_PERIPH_RELAY_ENABLED', r'AP_Periph_FW::handle_hardpoint_command'),
             ('AP_PERIPH_BATTERY_BALANCE_ENABLED', r'AP_Periph_FW::batt_balance_update'),
             ('AP_PERIPH_BATTERY_TAG_ENABLED', r'BatteryTag::update'),
+            ('AP_PERIPH_BATTERY_BMS_ENABLED', r'BatteryBMS::update'),
             ('AP_PERIPH_PROXIMITY_ENABLED', r'AP_Periph_FW::can_proximity_update'),
             ('AP_PERIPH_GPS_ENABLED', r'AP_Periph_FW::can_gps_update'),
             ('AP_PERIPH_ADSB_ENABLED', r'AP_Periph_FW::adsb_update'),
@@ -420,7 +414,7 @@ class ExtractFeatures(BuildScriptBase):
         text_output = self.run_program('EF', [
             self.strings,
             filename
-        ], show_output=False)
+        ], show_output=False, show_command=False)
         return text_output.split("\n")
 
     def extract(self):

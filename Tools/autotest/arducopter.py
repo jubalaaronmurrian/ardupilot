@@ -5900,21 +5900,11 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
 
     def PayloadPlaceMission(self):
         """Test payload placing in auto."""
-        self.context_push()
-
         self.set_analog_rangefinder_parameters()
         self.set_servo_gripper_parameters()
         self.reboot_sitl()
 
-        self.load_mission("copter_payload_place.txt")
-        if self.mavproxy is not None:
-            self.mavproxy.send('wp list\n')
-
-        self.set_parameter("AUTO_OPTIONS", 3)
-        self.change_mode('AUTO')
-        self.wait_ready_to_arm()
-
-        self.arm_vehicle()
+        num_wp = self.load_and_start_mission("copter_payload_place.txt")
 
         self.wait_text("Gripper load releas(ed|ing)", timeout=90, regex=True)
         dist_limit = 1
@@ -5929,11 +5919,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             raise NotAchievedException("Did not honour target lat/lng (dist=%f want <%f" %
                                        (dist, dist_limit))
 
-        self.wait_disarmed()
-
-        self.context_pop()
-        self.reboot_sitl()
-        self.progress("All done")
+        self.wait_waypoint(num_wp-1, num_wp-1)
+        self.do_RTL()
 
     def PayloadPlaceMissionOpenGripper(self):
         '''test running the mission when the gripper is open'''
@@ -6210,6 +6197,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         return min(max(pitch_angle_deg, PITCH_MIN), PITCH_MAX)
 
     def test_mount_pitch(self, despitch, despitch_tolerance, mount_mode, timeout=10, hold=0, constrained=True):
+        self.set_mount_mode(mount_mode)
         tstart = self.get_sim_time()
         success_start = 0
 
@@ -11133,6 +11121,31 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
 
         return current_log_filepath
 
+    def test_replay_gps_yaw_bit(self):
+        self.load_default_params_file("copter-gps-for-yaw.parm")
+        self.set_parameters({
+            "LOG_REPLAY": 1,
+            "LOG_DISARMED": 1,
+        })
+        self.zero_throttle()
+        self.reboot_sitl()
+
+        self.wait_sensor_state(mavutil.mavlink.MAV_SYS_STATUS_LOGGING, True, True, True)
+        self.wait_gps_fix_type_gte(6, message_type="GPS2_RAW", verbose=True)
+
+        current_log_filepath = self.current_onboard_log_filepath()
+        self.progress("Current log path: %s" % str(current_log_filepath))
+
+        self.change_mode("LOITER")
+        self.wait_ready_to_arm(require_absolute=True)
+        self.arm_vehicle()
+        self.takeoffAndMoveAway()
+        self.do_RTL()
+
+        self.reboot_sitl()
+
+        return current_log_filepath
+
     def test_replay_beacon_bit(self):
         self.set_parameters({
             "LOG_REPLAY": 1,
@@ -11522,6 +11535,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
 
         bits = [
             ('GPS', self.test_replay_gps_bit),
+            ('GPSForYaw', self.test_replay_gps_yaw_bit),
             ('Beacon', self.test_replay_beacon_bit),
             ('OpticalFlow', self.test_replay_optical_flow_bit),
         ]
