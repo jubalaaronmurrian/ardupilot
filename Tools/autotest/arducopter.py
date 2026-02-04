@@ -6632,32 +6632,51 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
     def MountPOIFromAuxFunction(self):
         '''test we can lock onto a lat/lng/alt with the flick of a switch'''
         self.install_terrain_handlers_context()
+        self.MountPOIFromAuxFunction_Main(enable=1)
+        self.MountPOIFromAuxFunction_Main(enable=0)
+
+    def MountPOIFromAuxFunction_Main(self, enable):
         self.setup_servo_mount()
+        self.progress(f">>>>>>>  Testing with TERRAIN_ENABLE = {enable} >>>>>>>>>>>>")
         self.set_parameters({
-            "RC10_OPTION": 186,
-            "MNT1_RC_RATE": 0,
-            "TERRAIN_ENABLE": 1,
-            "SIM_TERRAIN": 1,
-        })
+                "RC10_OPTION": 186,
+                "MNT1_RC_RATE": 0,
+                "TERRAIN_ENABLE": enable,
+                "SIM_TERRAIN": enable,
+                })
         self.reboot_sitl()  # to handle MNT1_TYPE changing # to handle MNT1_TYPE changing
         self.wait_ready_to_arm()
 
         self.takeoff(10, mode='GUIDED')
-        self.set_rc(6, 1000)
-        self.set_rc(10, 1900)  # engage poi lock
+        self.set_rc(6, 1000) # tilt mount down 45 degs
+        self.delay_sim_time(.1) # allow mount to move
 
         self.progress("checking mount angles")
         mount_roll, mount_pitch, mount_yaw, mount_yaw_is_absolute = self.get_mount_roll_pitch_yaw_deg()
-        assert -46 <= mount_pitch <= -44, f"Pitch is out of range: {mount_pitch}"
-        self.fly_guided_move_local(100, 100, 70)   # move and check that pitch and yaw track
+        assert -46 <= mount_pitch <= -44, f"Initial Mount Pitch is out of range: {mount_pitch}"
+
+        self.set_rc(10, 1900)  # engage poi lock
+        self.delay_sim_time(5) # allow time to compute POI
+        self.set_rc(10, 1500)  # revert mode, keep POI
+
+        self.fly_guided_move_local(100, 100, 70)   # move to new position
         WaitAndMaintainAttitude(self, 0, 0, epsilon=1, minimum_duration=1, timeout=5).run()
+
+        self.set_rc(10, 1900)  # re-engage poi lock and check angles again
+        self.delay_sim_time(.1) # allow mount to move
+
         mount_roll, mount_pitch, mount_yaw, mount_yaw_is_absolute = self.get_mount_roll_pitch_yaw_deg()
-        assert -27 <= mount_pitch <= -23, f"Pitch2 is out of range: {mount_pitch}"
-        assert -179 <= mount_yaw <= -175, f"Yaw2 is out of range: {mount_yaw}"
-        self.set_rc(10, 1500)  # switch to middle to return to RC target mode and check that mount reverts to initial angles
+        assert (-178 <= mount_yaw <= -176), f"Mount Yaw2 is out of range: {mount_yaw}"
+        assert -26 <= mount_pitch <= -24, f"Mount Pitch2 is out of range: {mount_pitch}"
+        self.progress(f"Mount Pitch2 = {mount_pitch}. Mount Yaw2 = {mount_yaw}")
+
+        self.set_rc(10, 1500)  # return to RC target mode and check that mount reverts to initial angles
+        self.delay_sim_time(.1) # allow mount to move
+
         mount_roll, mount_pitch, mount_yaw, mount_yaw_is_absolute = self.get_mount_roll_pitch_yaw_deg()
-        assert -46 <= mount_pitch <= -44, f"Pitch3 is out of range: {mount_pitch}"
-        assert -1 <= mount_yaw <= 1, f"Yaw3 is out of range: {mount_yaw}"
+        assert -46 <= mount_pitch <= -44, f"Mount Pitch3 is out of range: {mount_pitch}"
+        assert -1 <= mount_yaw <= 1, f"Mount Yaw3 is out of range: {mount_yaw}"
+        self.progress(f"Mount Pitch3 = {mount_pitch}. Mount Yaw3 = {mount_yaw}")
 
         self.change_mode('RTL')
         self.wait_disarmed()
@@ -11162,7 +11181,6 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             "LOG_REPLAY": 1,
             "LOG_DISARMED": 1,
         })
-        self.zero_throttle()
         self.reboot_sitl()
 
         self.wait_sensor_state(mavutil.mavlink.MAV_SYS_STATUS_LOGGING, True, True, True)
@@ -11209,6 +11227,47 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         log_difference = [x for x in new_onboard_logs if x not in old_onboard_logs]
         print("log difference: %s" % str(log_difference))
         return log_difference[0]
+
+    def test_replay_wind_and_airspeed_bit(self):
+        self.set_parameters({
+            "LOG_REPLAY": 1,
+            "LOG_DISARMED": 1,
+            "EK3_ENABLE": 1,
+            "WP_YAW_BEHAVIOR": 1, # face into wind
+
+            "EK3_DRAG_BCOEF_X": 17.209, # wind estimation must be on for airspeed
+            "EK3_DRAG_BCOEF_Y": 17.209, # these are the suggested values printed out by sitl
+            "EK3_DRAG_MCOEF": 0.209,
+            "SIM_WIND_SPD": 3,
+
+            "ARSPD_ENABLE": 1,
+            "ARSPD_TYPE": 100,
+            "ARSPD_USE": 1, # technically not actually supported on copter
+        })
+        self.reboot_sitl()
+
+        self.wait_sensor_state(mavutil.mavlink.MAV_SYS_STATUS_LOGGING, True, True, True)
+
+        current_log_filepath = self.current_onboard_log_filepath()
+        self.progress("Current log path: %s" % str(current_log_filepath))
+
+        self.change_mode("LOITER")
+        self.wait_ready_to_arm(require_absolute=True)
+        # make sure airspeed is being used
+        self.wait_sensor_state(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_DIFFERENTIAL_PRESSURE, True, True, True)
+        self.arm_vehicle()
+        self.takeoffAndMoveAway()
+
+        # make sure airspeed was fused at some point after some flying
+        m = self.assert_receive_message('EKF_STATUS_REPORT')
+        if m.airspeed_variance == 0:
+            raise NotAchievedException("never fused airspeed")
+
+        self.do_RTL()
+
+        self.reboot_sitl()
+
+        return current_log_filepath
 
     def GPSBlendingLog(self):
         '''Test GPS Blending'''
@@ -11571,6 +11630,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         bits = [
             ('GPS', self.test_replay_gps_bit),
             ('GPSForYaw', self.test_replay_gps_yaw_bit),
+            ('WindAndAirspeed', self.test_replay_wind_and_airspeed_bit),
             ('Beacon', self.test_replay_beacon_bit),
             ('OpticalFlow', self.test_replay_optical_flow_bit),
         ]
@@ -11587,6 +11647,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             (current_log_filepath, os.path.getsize(current_log_filepath))
         ))
 
+        self.zero_throttle()
         self.run_replay(current_log_filepath)
 
         replay_log_filepath = self.current_onboard_log_filepath()
@@ -13774,8 +13835,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.set_parameters({
             "RC6_OPTION": 219,  # RC6 used for tuning
             "TUNE": 60,  # 60 is x/y loiter speed
-            "TUNE_MIN": 0.02,  # 20cm/s
-            "TUNE_MAX": 1000,  # 10m/s
+            "TUNE_MIN": 0.2,  # 0.2m/s
+            "TUNE_MAX": 10,  # 10m/s
             "AUTO_OPTIONS": 3,
         })
         self.set_rc(6, 2000)
@@ -13804,8 +13865,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         '''check tuning channel options work independently'''
         RC6_MIN = 1100    # yes, this is strange!
         RC6_MAX = 1200    # yes, this is strange!
-        TUNE_MIN = 25      # cm/s
-        TUNE_MAX = 1000   # cm/s
+        TUNE_MIN = 0.25   # m/s
+        TUNE_MAX = 10.0   # m/s
 
         RC7_MIN = 1000
         RC7_MAX = 2000
@@ -13831,20 +13892,19 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
 
         self.set_rc(6, RC6_MIN)
         self.delay_sim_time(1)
-        self.assert_parameter_value("LOIT_SPEED", TUNE_MIN)
+        self.assert_parameter_value("LOIT_SPEED_MS", TUNE_MIN)
 
         self.set_rc(6, RC6_MAX)
         self.delay_sim_time(1)
-        self.assert_parameter_value("LOIT_SPEED", TUNE_MAX)
-
+        self.assert_parameter_value("LOIT_SPEED_MS", TUNE_MAX)
         self.set_rc(6, RC6_MIN)
         self.delay_sim_time(1)
-        self.assert_parameter_value("LOIT_SPEED", TUNE_MIN)
+        self.assert_parameter_value("LOIT_SPEED_MS", TUNE_MIN)
 
         self.set_rc(6, int((RC6_MIN+RC6_MAX)/2))
         self.delay_sim_time(1)
         # note that this check is also used below ("RC6 is unaffected")
-        self.assert_parameter_value("LOIT_SPEED", int((TUNE_MIN+TUNE_MAX)/2), epsilon=1)
+        self.assert_parameter_value("LOIT_SPEED_MS", int((TUNE_MIN+TUNE_MAX)/2), epsilon=1)
 
         self.set_rc(7, RC7_MIN)
         self.delay_sim_time(1)
@@ -13855,7 +13915,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.assert_parameter_value("PSC_NE_VEL_I", TUNE2_MAX)
 
         # make sure RC6 is unaffected:
-        self.assert_parameter_value("LOIT_SPEED", int((TUNE_MIN+TUNE_MAX)/2), epsilon=1)
+        self.assert_parameter_value("LOIT_SPEED_MS", int((TUNE_MIN+TUNE_MAX)/2), epsilon=1)
 
         self.set_rc(7, int((RC7_MIN+RC7_MAX)/2))
         self.delay_sim_time(1)
