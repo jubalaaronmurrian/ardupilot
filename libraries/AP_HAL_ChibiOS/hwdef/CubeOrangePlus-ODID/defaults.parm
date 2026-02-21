@@ -27,7 +27,7 @@ DID_CANDRIVER 0
 DID_MAVPORT 4
 
 #Setup TF02-PRO RangeFinder on I2C - 0x10 - 20
-RNGFND1_ADDR 16 @readonly
+RNGFND1_ADDR 16 
 RNGFND1_GNDCLEAR 10
 RNGFND1_MIN_CM 10
 RNGFND1_MAX_CM 4000
@@ -35,12 +35,33 @@ RNGFND1_ORIENT 25
 RNGFND1_TYPE 25
 
 #Setup TF-Luna RangeFinder on I2C - 0x11 - 22
-RNGFND2_ADDR 17 @readonly
+RNGFND2_ADDR 17 
 RNGFND2_GNDCLEAR 10
 RNGFND2_MIN_CM 20
 RNGFND2_MAX_CM 800
 RNGFND2_ORIENT 0
 RNGFND2_TYPE 25
+
+#TakeoffAndLanding
+#https://ardupilot.org/copter/docs/common-understanding-altitude.html
+#https://ardupilot.org/plane/docs/parameters.html#rngfnd-landing
+RNGFND_LANDING 1
+
+#RTL
+#https://ardupilot.org/copter/docs/rtl-mode.html
+#https://ardupilot.org/copter/docs/smartrtl-mode.html
+BATT_FS_LOW_ACT 1
+RTL_ALT 1.5
+RTL_ALT_FINAL 1.5
+RTL_LOIT_TIME 5
+WP_YAW_BEHAVIOR 1
+
+#Land the Drone
+BATT_FS_CRT_ACT 2
+
+#Obstacle Avoidance
+#https://ardupilot.org/copter/docs/common-simple-object-avoidance.html
+AVOID_ALT_MIN 2.5
 
 
 
