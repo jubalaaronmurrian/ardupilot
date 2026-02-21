@@ -65,6 +65,13 @@ BATT_FS_CRT_ACT 2
 #https://ardupilot.org/copter/docs/common-simple-object-avoidance.html
 AVOID_ALT_MIN 2.5
 
+#Battery failsafe
+#https://ardupilot.org/copter/docs/failsafe-battery.html
+BATT_LOW_VOLT 14.0
+BATT_CRT_VOLT 13.2
+BATT_LOW_MAH 4000
+BATT_FS_VOLTSRC 1
+
 
 
 
