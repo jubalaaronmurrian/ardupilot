@@ -72,6 +72,14 @@ BATT_CRT_VOLT 13.2
 BATT_LOW_MAH 4000
 BATT_FS_VOLTSRC 1
 
+#Fences
+#https://ardupilot.org/copter/docs/common-geofencing-landing-page.html
+FENCE_ENABLE 1
+FENCE_ACTION 1
+FENCE_MARGIN 20
+FENCE_RADIUS 30
+FENCE_ALT_MAX 121.92
+FENCE_TYPE 1
 
 
 
